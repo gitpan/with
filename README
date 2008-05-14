@@ -2,7 +2,7 @@ NAME
     with - Lexically call methods with a default object.
 
 VERSION
-    Version 0.01
+    Version 0.02
 
 SYNOPSIS
         package Deuce;
@@ -47,19 +47,19 @@ DESCRIPTION
     will be the last specified one.
 
 HOW DOES IT WORK
-    The main problem to address is that lexical scope and source
-    modifications can only occur at compile time, while object creation and
+    The main problem to address is that lexical scoping and source
+    modification can only occur at compile time, while object creation and
     method resolution happen at run-time.
 
     The "use with \$obj" statement stores an address to the variable $obj in
     the "with" field of the hints hash "%^H". It also starts a source filter
     that replaces function calls with calls to "with::defer", passing the
     name of the original function as the first argument. When the replaced
-    function is part of Perl core, the call is deferred to a corresponding
-    wrapper generated in the "with" namespace. Some keywords that couldn't
-    possibly be replaced are also completely skipped. "no with" undefines
-    the hint and deletes the source filter, stopping any subsequent
-    modification in the current scope.
+    function has a prototype or is part of the core, the call is deferred to
+    a corresponding wrapper generated in the "with" namespace. Some keywords
+    that couldn't possibly be replaced are also completely skipped. "no
+    with" undefines the hint and deletes the source filter, stopping any
+    subsequent modification in the current scope.
 
     When the script is executed, deferred calls first fetch the default
     object back from the address stored into the hint. If the object "->can"
@@ -67,15 +67,15 @@ HOW DOES IT WORK
     namespace is inspected for a subroutine with the proper name, and if
     it's present the program "goto"s into it. If that fails too, the core
     function with the same name is recalled if possible, or an "Undefined
-    subroutine" warning is thrown.
+    subroutine" error is thrown.
 
 IGNORED KEYWORDS
-    A call will never dispatch to methods whose name is part of :
+    A call will never be dispatched to a method whose name is one of :
 
         my our local sub do eval goto return
         if else elsif unless given when or and 
         while until for foreach next redo last continue
-        eq ne lt gt le ge
+        eq ne lt gt le ge cmp
         map grep system exec sort print say
         new
         STDIN STDOUT STDERR
@@ -89,6 +89,16 @@ CAVEATS
     have bugs.
 
     Don't put anything on the same line of "use with \$obj" or "no with".
+
+    When there's a function in the caller namespace that has a core function
+    name, and when no method with the same name is present, the ambiguity is
+    resolved in favor of the caller namespace. That's different from the
+    usual perl semantics where "sub push; push @a, 1" gets resolved to
+    CORE::push.
+
+    If a method has the same name as a prototyped function in the caller
+    namespace, and if a called is deferred to the method, it will have its
+    arguments passed by value.
 
 DEPENDENCIES
     perl 5.9.4.

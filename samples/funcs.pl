@@ -11,7 +11,7 @@ die "no functions" unless $f;
 my @f = $f =~ /C<([^<>]+)>/g;
 my %dup;
 @f = sort
-      grep { eval { () = prototype "CORE::$_" }; !$@ }
+      grep { eval { () = prototype "CORE::$_"; 1 } }
        grep !$dup{$_}++, @f;
 my $c = 10;
 my $base = "my \@core = qw/";
@@ -31,6 +31,7 @@ for (@f) {
  } else {
   $l = length($base) - 1;
   $out .= "\n" . (' ' x $l);
+  redo;
  }
 }
 $out .= "/;\n";

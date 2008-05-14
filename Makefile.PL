@@ -32,7 +32,6 @@ WriteMakefile(
         'Scalar::Util'         => 0,
         'Sub::Prototype::Util' => 0.08,
         'Text::Balanced'       => 0,
-        'Test::More'           => 0,
     },
     dist          => { 
         PREOP                => 'pod2text lib/with.pm > $(DISTVNAME)/README; '

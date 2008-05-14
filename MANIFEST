@@ -10,6 +10,7 @@ t/10-with.t
 t/11-skip.t
 t/12-keywords.t
 t/13-scope.t
+t/14-defer.t
 t/90-boilerplate.t
 t/91-pod.t
 t/92-pod-coverage.t

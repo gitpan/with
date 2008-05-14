@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:                with
-version:             0.01
+version:             0.02
 abstract:            Lexically call methods with a default object.
 license:             perl
 author:              
@@ -12,7 +12,6 @@ requires:
     Filter::Util::Call:            0
     Scalar::Util:                  0
     Sub::Prototype::Util:          0.08
-    Test::More:                    0
     Text::Balanced:                0
 meta-spec:
     url:     http://module-build.sourceforge.net/META-spec-v1.3.html

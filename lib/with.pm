@@ -10,7 +10,7 @@ use Filter::Util::Call;
 use Text::Balanced qw/extract_variable extract_quotelike extract_multiple/;
 use Scalar::Util qw/refaddr set_prototype/;
 
-use Sub::Prototype::Util qw/flatten recall wrap/;
+use Sub::Prototype::Util qw/flatten wrap/;
 
 =head1 NAME
 
@@ -18,11 +18,11 @@ with - Lexically call methods with a default object.
 
 =head1 VERSION
 
-Version 0.01
+Version 0.02
 
 =cut
 
-our $VERSION = '0.01';
+our $VERSION = '0.02';
 
 =head1 SYNOPSIS
 
@@ -97,32 +97,36 @@ my %skip;
 $skip{$_} = 1 for qw/my our local sub do eval goto return
                      if else elsif unless given when or and 
                      while until for foreach next redo last continue
-                     eq ne lt gt le ge
+                     eq ne lt gt le ge cmp
                      map grep system exec sort print say
                      new
                      STDIN STDOUT STDERR/;
 
 my @core = qw/abs accept alarm atan2 bind binmode bless caller chdir chmod
-              chop chown chr chroot close closedir connect cos crypt dbmclose
-              defined delete die do dump each endgrent endhostent endnetent
-              endpwent endservent eof eval exec exists exit exp fcntl fileno
-              fork format formline getc getgrent getgrgid getgrnam
-              gethostbyname gethostent getlogin getnetbyaddr getnetbyname
+              chomp chop chown chr chroot close closedir connect cos crypt
+              dbmclose dbmopen defined delete die do dump each endgrent
+              endhostent endnetent endprotoent endpwent endservent eof eval
+              exec exists exit exp fcntl fileno flock fork format formline
+              getc getgrent getgrgid getgrnam gethostbyaddr gethostbyname
+              gethostent getlogin getnetbyaddr getnetbyname getnetent
               getpeername getpgrp getppid getpriority getprotobyname
-              getprotoent getpwent getpwnam getpwuid getservbyname
-              getservent getsockname getsockopt glob gmtime goto grep hex
-              int ioctl join keys kill last lc lcfirst length link listen
-              localtime lock log lstat map mkdir msgctl msgget msgrcv msgsnd
-              next no oct open opendir ord our pack package pipe pop pos print
-              prototype push quotemeta rand read readdir readline readlink
-              redo ref rename require reset return reverse rewinddir rindex
+              getprotobynumber getprotoent getpwent getpwnam getpwuid
+              getservbyname getservbyport getservent getsockname getsockopt
+              glob gmtime goto grep hex index int ioctl join keys kill last lc
+              lcfirst length link listen local localtime lock log lstat map
+              mkdir msgctl msgget msgrcv msgsnd my next no oct open opendir
+              ord our pack package pipe pop pos print printf prototype push
+              quotemeta rand read readdir readline readlink recv redo ref
+              rename require reset return reverse rewinddir rindex rmdir
               scalar seek seekdir select semctl semget semop send setgrent
-              setnetent setpgrp setpriority setprotoent setpwent setservent
-              shift shmctl shmget shmread shmwrite shutdown sin sleep socket
-              sort splice split sprintf sqrt srand stat study sub substr
-              syscall sysopen sysread sysseek system syswrite tell telldir tie
-              time times truncate uc ucfirst umask undef unlink unpack unshift
-              use utime values vec wait waitpid wantarray warn write/;
+              sethostent setnetent setpgrp setpriority setprotoent setpwent
+              setservent setsockopt shift shmctl shmget shmread shmwrite
+              shutdown sin sleep socket socketpair sort splice split sprintf
+              sqrt srand stat study sub substr symlink syscall sysopen sysread
+              sysseek system syswrite tell telldir tie tied time times
+              truncate uc ucfirst umask undef unlink unpack unshift untie use
+              utime values vec wait waitpid wantarray warn write/;
+
 my %core;
 $core{$_} = prototype "CORE::$_" for @core;
 undef @core;
@@ -160,10 +164,10 @@ sub corewrap {
     }
    }
    # Try function call in caller namescape.
-   $name = $caller . '::' . $name;
-   if (code $name) {
+   my $qname = $caller . '::' . $name;
+   if (code $qname) {
     @_ = flatten $proto, @_ if defined $proto;
-    goto &$name;
+    goto &$qname;
    }
    # Try core function call.
    my @ret = eval { $func->(@_) };
@@ -202,17 +206,17 @@ sub subwrap {
     }
    }
    # Try function call in caller namescape.
-   $name = $caller . '::' . $name;
-   goto &$name if code $name;
+   my $qname = $caller . '::' . $name;
+   goto &$qname if code $qname;
    # This call won't succeed, but it'll throw an exception we should propagate.
-   eval { $name->(@_) };
+   eval { no strict 'refs'; $qname->(@_) };
    if ($@) {
     # Produce a correct 'Undefined subroutine' error in regard of the caller.
     my $msg = $@;
     $msg =~ s/(called)\s+at.*/$1/s;
     croak $msg;
    }
-   croak "$name didn't exist and yet the call succeeded\n";
+   croak "$qname didn't exist and yet the call succeeded\n";
   }, $proto;
   {
    no strict 'refs';
@@ -238,7 +242,7 @@ sub defer {
  $name = $caller . '::' . $name;
  goto &$name if code $name;
  # This call won't succeed, but it'll throw an exception we should propagate.
- eval { $name->(@_) };
+ eval { no strict 'refs'; $name->(@_) };
  if ($@) {
   # Produce a correct 'Undefined subroutine' error in regard of the caller.
   my $msg = $@;
@@ -300,20 +304,20 @@ sub unimport {
 
 =head1 HOW DOES IT WORK
 
-The main problem to address is that lexical scope and source modifications can only occur at compile time, while object creation and method resolution happen at run-time.
+The main problem to address is that lexical scoping and source modification can only occur at compile time, while object creation and method resolution happen at run-time.
 
-The C<use with \$obj> statement stores an address to the variable C<$obj> in the C<with> field of the hints hash C<%^H>. It also starts a source filter that replaces function calls with calls to C<with::defer>, passing the name of the original function as the first argument. When the replaced function is part of Perl core, the call is deferred to a corresponding wrapper generated in the C<with> namespace. Some keywords that couldn't possibly be replaced are also completely skipped. C<no with> undefines the hint and deletes the source filter, stopping any subsequent modification in the current scope.
+The C<use with \$obj> statement stores an address to the variable C<$obj> in the C<with> field of the hints hash C<%^H>. It also starts a source filter that replaces function calls with calls to C<with::defer>, passing the name of the original function as the first argument. When the replaced function has a prototype or is part of the core, the call is deferred to a corresponding wrapper generated in the C<with> namespace. Some keywords that couldn't possibly be replaced are also completely skipped. C<no with> undefines the hint and deletes the source filter, stopping any subsequent modification in the current scope.
 
-When the script is executed, deferred calls first fetch the default object back from the address stored into the hint. If the object C<< ->can >> the original function name, a method call is issued. If not, the calling namespace is inspected for a subroutine with the proper name, and if it's present the program C<goto>s into it. If that fails too, the core function with the same name is recalled if possible, or an "Undefined subroutine" warning is thrown.
+When the script is executed, deferred calls first fetch the default object back from the address stored into the hint. If the object C<< ->can >> the original function name, a method call is issued. If not, the calling namespace is inspected for a subroutine with the proper name, and if it's present the program C<goto>s into it. If that fails too, the core function with the same name is recalled if possible, or an "Undefined subroutine" error is thrown.
 
 =head1 IGNORED KEYWORDS
 
-A call will never dispatch to methods whose name is part of :
+A call will never be dispatched to a method whose name is one of :
 
     my our local sub do eval goto return
     if else elsif unless given when or and 
     while until for foreach next redo last continue
-    eq ne lt gt le ge
+    eq ne lt gt le ge cmp
     map grep system exec sort print say
     new
     STDIN STDOUT STDERR
@@ -327,6 +331,10 @@ No function or constant is exported by this pragma.
 Most likely slow. Almost surely non thread-safe. Contains source filters, hence brittle. Messes with the dreadful prototypes. Crazy. Will have bugs.
 
 Don't put anything on the same line of C<use with \$obj> or C<no with>.
+
+When there's a function in the caller namespace that has a core function name, and when no method with the same name is present, the ambiguity is resolved in favor of the caller namespace. That's different from the usual perl semantics where C<sub push; push @a, 1> gets resolved to CORE::push.
+
+If a method has the same name as a prototyped function in the caller namespace, and if a called is deferred to the method, it will have its arguments passed by value.
 
 =head1 DEPENDENCIES
 
